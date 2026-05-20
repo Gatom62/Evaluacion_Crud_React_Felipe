@@ -17,7 +17,7 @@ function Mensajes() {
 
   const fetchMensajes = async () => {
     try {
-      const res = await fetch(`${API_URL}?_limit=10`); 
+      const res = await fetch(`${API_URL}?_limit=10`);
       const data = await res.json();
       setMensajes(data);
     } catch (err) {
@@ -39,13 +39,16 @@ function Mensajes() {
     setLoading(true);
     try {
       if (editId) {
-        const res = await fetch(`${API_URL}/${editId}`, {
+        await fetch(`${API_URL}/${editId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...form, id: editId }),
         });
-        const data = await res.json();
-        setMensajes((prev) => prev.map((m) => (m.id === editId ? data : m)));
+        setMensajes((prev) =>
+          prev.map((m) =>
+            m.id === editId ? { ...m, title: form.title, body: form.body } : m,
+          ),
+        );
       } else {
         const res = await fetch(API_URL, {
           method: "POST",
