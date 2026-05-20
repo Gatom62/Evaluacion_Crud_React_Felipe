@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const USUARIO_MOCK = {
-  email: "20240046@gmail.com",
+  email: "20240046@ricaldone.edu.sv",
   password: "123",
-  usuario: { id: "1", name: "Felipe", email: "20240046@gmail.com" },
+  usuario: { id: "1", name: "Felipe", email: "20240046@ricaldone.edu.sv" },
 };
 
 const Login = () => {
@@ -17,33 +17,27 @@ const Login = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError("");
-
     setLoading(true);
 
-    if (!email.trim() || !password) {
-      setError("Por favor completa email y contraseña.");
-      return;
-    }
-
-    try {
-      await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 600));
 
       if (
         form.email === USUARIO_MOCK.email &&
         form.password === USUARIO_MOCK.password
       ) {
         localStorage.setItem("token", "token-mock-123");
-        localStorage.setItem("usuario", JSON.stringify(USUARIO_MOCK.usuario));
+        localStorage.setItem(
+          "usuario",
+          JSON.stringify(USUARIO_MOCK.usuario),
+        );
         navigate("/mensajes");
+      } else {
+setError("Credenciales invalidas")
       }
-    } catch (err) {
-      setError(setError(err.message));
-    } finally {
-      setLoading(false);
-    }
+      setLoading(false)
   };
 
   return (

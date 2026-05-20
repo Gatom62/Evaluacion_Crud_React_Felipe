@@ -1,382 +1,228 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router'
-import Nav from '../components/Nav'
-import ProductForm from '../components/ProductForm'
-import ConfirmModal from '../components/ConfirmModal'
- 
-const Mensajes = () => {
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [categories, setCategories] = useState([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 5
-  const navigate = useNavigate()
-  const token = localStorage.getItem('fakestore_token') || sessionStorage.getItem('fakestore_token')
- 
-  const filteredProducts = products.filter((product) => {
-    const query = searchTerm.trim().toLowerCase()
-    if (!query) return true
-    return [product.title, product.description, product.category]
-      .join(' ')
-      .toLowerCase()
-      .includes(query)
-  })
- 
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage))
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const currentProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage)
- 
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+const API_URL = "https://jsonplaceholder.typicode.com/posts";
+const EMPTY_FORM = { title: "", body: "" };
+
+function Mensajes() {
+  const navigate = useNavigate();
+  const usuario = JSON.parse(localStorage.getItem("usuario") || "{}");
+
+  const [mensajes, setMensajes] = useState([]);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editId, setEditId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const fetchMensajes = async () => {
+    try {
+      const res = await fetch(`${API_URL}?_limit=10`); 
+      const data = await res.json();
+      setMensajes(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   useEffect(() => {
-    if (!token) {
-      navigate('/')
-      return
-    }
- 
-    const fetchProducts = async () => {
-      try {
-        const response = await fetch('https://fakestoreapi.com/products')
-        if (!response.ok) {
-          throw new Error('Error al cargar los productos')
-        }
- 
-        const data = await response.json()
-        setProducts(data)
-      } catch (err) {
-        setError(err.message || 'No se pudieron cargar los productos')
-      } finally {
-        setLoading(false)
-      }
-    }
- 
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch('https://fakestoreapi.com/products/categories')
-        if (!response.ok) {
-          throw new Error('Error al cargar las categorías')
-        }
- 
-        const data = await response.json()
-        setCategories(data)
-      } catch (err) {
-        console.warn(err)
-      }
-    }
- 
-    fetchProducts()
-    fetchCategories()
-  }, [navigate, token])
- 
-  const handlePageChange = (page) => {
-    setCurrentPage(page)
-  }
- 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value)
-    setCurrentPage(1)
-  }
- 
-  const handleEditProduct = async (productId) => {
-    setProductError('')
-    setLoadingProductDetail(true)
- 
+    fetchMensajes();
+  }, []);
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
     try {
-      const response = await fetch(`https://fakestoreapi.com/products/${productId}`)
-      if (!response.ok) {
-        throw new Error('Error al cargar el producto')
+      if (editId) {
+        const res = await fetch(`${API_URL}/${editId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, id: editId }),
+        });
+        const data = await res.json();
+        setMensajes((prev) => prev.map((m) => (m.id === editId ? data : m)));
+      } else {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, userId: 1 }),
+        });
+        const data = await res.json();
+        setMensajes((prev) => [data, ...prev]);
       }
- 
-      const data = await response.json()
-      setEditingProduct(data)
-      setShowProductForm(true)
+      setForm(EMPTY_FORM);
+      setEditId(null);
+      setShowForm(false);
     } catch (err) {
-      setProductError(err.message || 'No se pudo cargar el producto')
+      setError(err.message);
     } finally {
-      setLoadingProductDetail(false)
+      setLoading(false);
     }
-  }
- 
-  const handleUpdateProduct = async (formData) => {
-    setProductError('')
-    setProductSuccess('')
-    setProductSubmitting(true)
- 
+  };
+
+  const handleEdit = (mensaje) => {
+    setForm({ title: mensaje.title, body: mensaje.body });
+    setEditId(mensaje.id);
+    setShowForm(true);
+    setError("");
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("¿Eliminar este mensaje?")) return;
     try {
-      const response = await fetch(`https://fakestoreapi.com/products/${editingProduct.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
- 
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(text || 'Error actualizando producto')
-      }
- 
-      const data = await response.json()
-      setProducts((prev) =>
-        prev.map((p) => (p.id === editingProduct.id ? data : p))
-      )
-      setProductSuccess('Producto actualizado correctamente.')
-      setShowProductForm(false)
-      setEditingProduct(null)
-      console.log('fakestore updated product:', data)
+      await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+      setMensajes((prev) => prev.filter((m) => m.id !== id));
     } catch (err) {
-      setProductError(err.message || 'No se pudo actualizar el producto')
-    } finally {
-      setProductSubmitting(false)
+      setError(err.message);
     }
-  }
- 
-  const handleDeleteProduct = async (productId) => {
-    setProductToDelete(productId)
-    setShowDeleteConfirm(true)
-  }
- 
-  const confirmDeleteProduct = async () => {
-    if (!productToDelete) return
- 
-    setProductError('')
-    setProductSuccess('')
-    setShowDeleteConfirm(false)
- 
-    try {
-      const response = await fetch(`https://fakestoreapi.com/products/${productToDelete}`, {
-        method: 'DELETE'
-      })
- 
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(text || 'Error eliminando producto')
-      }
- 
-      setProducts((prev) => prev.filter((p) => p.id !== productToDelete))
-      setProductSuccess('Producto eliminado correctamente.')
-      setProductToDelete(null)
-    } catch (err) {
-      setProductError(err.message || 'No se pudo eliminar el producto')
-      setProductToDelete(null)
-    }
-  }
- 
-  const cancelDeleteProduct = () => {
-    setShowDeleteConfirm(false)
-    setProductToDelete(null)
-  }
- 
-  const [showProductForm, setShowProductForm] = useState(false)
-  const [productSubmitting, setProductSubmitting] = useState(false)
-  const [productError, setProductError] = useState('')
-  const [productSuccess, setProductSuccess] = useState('')
-  const [editingProduct, setEditingProduct] = useState(null)
-  const [loadingProductDetail, setLoadingProductDetail] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [productToDelete, setProductToDelete] = useState(null)
- 
-  const handleCreateProduct = async (formData) => {
-    setProductError('')
-    setProductSuccess('')
-    setProductSubmitting(true)
- 
-    try {
-      const response = await fetch('https://fakestoreapi.com/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
- 
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(text || 'Error creando producto')
-      }
- 
-      const data = await response.json()
-      setProducts((prev) => [data, ...(prev || [])])
-      setProductSuccess('Producto creado correctamente. ID: ' + (data.id || '—'))
-      setShowProductForm(false)
-      setEditingProduct(null)
-      setCurrentPage(1)
-    } catch (err) {
-      setProductError(err.message || 'No se pudo crear el producto')
-    } finally {
-      setProductSubmitting(false)
-    }
-  }
- 
+  };
+
+  const handleCancel = () => {
+    setForm(EMPTY_FORM);
+    setEditId(null);
+    setShowForm(false);
+    setError("");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("usuario");
+    navigate("/");
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {token && <Nav />}
- 
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-6 space-y-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold text-slate-900">Productos</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm text-slate-500">Total productos</p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">{filteredProducts.length}</p>
-              </div>
- 
+    <div className="min-h-screen bg-gray-100">
+      <nav className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+        <h1 className="font-bold text-gray-800 text-lg">Mensajes</h1>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500 hidden sm:block">
+            Hola, {usuario.name}
+          </span>
+          <button
+            onClick={handleLogout}
+            className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </nav>
+
+      <main className="max-w-3xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-800">Mis mensajes</h2>
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              + Nuevo mensaje
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">
+            {error}
+          </div>
+        )}
+
+        {showForm && (
+          <div className="bg-white rounded-xl shadow-sm p-5 mb-5">
+            <h3 className="font-semibold text-gray-800 mb-4">
+              {editId ? "Editar mensaje" : "Nuevo mensaje"}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Título
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={form.title}
+                  onChange={handleChange}
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mensaje
+                </label>
+                <textarea
+                  name="body"
+                  value={form.body}
+                  onChange={handleChange}
+                  rows={3}
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                >
+                  {loading ? "Guardando..." : editId ? "Actualizar" : "Crear"}
+                </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setEditingProduct(null)
-                    setShowProductForm((s) => !s)
-                  }}
-                  className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                  onClick={handleCancel}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm px-4 py-2 rounded-lg transition-colors"
                 >
-                  Nuevo producto
+                  Cancelar
                 </button>
               </div>
-            </div>
+            </form>
           </div>
- 
-          <div className="max-w-xl">
-            <label htmlFor="product-search" className="sr-only">Buscar productos</label>
-            <input
-              id="product-search"
-              type="text"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              placeholder="Buscar por título, descripción o categoría"
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-            />
-          </div>
-        </div>
-        {productError && <div className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-rose-700">{productError}</div>}
-        {productSuccess && <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-emerald-700">{productSuccess}</div>}
- 
-        {showProductForm && (
-          <ProductForm
-            initialData={editingProduct || {}}
-            categories={categories}
-            onSubmit={editingProduct ? handleUpdateProduct : handleCreateProduct}
-            submitting={productSubmitting || loadingProductDetail}
-            onClose={() => {
-              setShowProductForm(false)
-              setEditingProduct(null)
-            }}
-          />
         )}
- 
-        <ConfirmModal
-          title="Confirmar eliminación"
-          message="¿Estás seguro de que deseas eliminar este producto? Esta acción no se puede deshacer."
-          isOpen={showDeleteConfirm}
-          isDangerous={true}
-          onConfirm={confirmDeleteProduct}
-          onCancel={cancelDeleteProduct}
-        />
- 
-        <div className="overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-slate-200">
-          <div className="border-b border-slate-200 px-6 py-4 bg-slate-100">
-            <h2 className="text-lg font-medium text-slate-900">Catálogo</h2>
+
+        {mensajes.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm p-10 text-center text-gray-400 text-sm">
+            No hay mensajes aún. ¡Crea el primero!
           </div>
- 
-          <div className="p-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-20 text-slate-500">Cargando productos...</div>
-            ) : error ? (
-              <div className="rounded-2xl bg-rose-50 px-4 py-6 text-rose-700">{error}</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200 text-left">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-6 py-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Título</th>
-                      <th className="px-6 py-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Precio</th>
-                      <th className="px-6 py-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Descripción</th>
-                      <th className="px-6 py-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Categoría</th>
-                      <th className="px-6 py-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {currentProducts.map((product) => (
-                      <tr key={product.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 align-top text-sm text-slate-700 max-w-xl break-words">{product.title}</td>
-                        <td className="px-6 py-4 align-top text-sm font-semibold text-slate-900">${product.price.toFixed(2)}</td>
-                        <td className="px-6 py-4 align-top text-sm text-slate-600 max-w-2xl break-words">{product.description}</td>
-                        <td className="px-6 py-4 align-top text-sm text-slate-700">
-                          <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{product.category}</span>
-                        </td>
-                        <td className="px-6 py-4 align-top text-sm text-slate-700">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleEditProduct(product.id)}
-                              disabled={loadingProductDetail}
-                              className="rounded-full w-full bg-blue-600 px-3 py-1 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-                            >
-                              Editar producto
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteProduct(product.id)}
-                              className="rounded-full w-full bg-red-600 px-3 py-1 text-white transition hover:bg-red-700"
-                            >
-                              Eliminar producto
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
- 
-                <div className="mt-6 flex flex-col gap-3 rounded-3xl bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm text-slate-600">
-                    Página {currentPage} de {totalPages}
-                  </div>
- 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-                    >
-                      Anterior
-                    </button>
- 
-                    {[...Array(totalPages)].map((_, index) => {
-                      const page = index + 1
-                      return (
-                        <button
-                          key={page}
-                          type="button"
-                          onClick={() => handlePageChange(page)}
-                          className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
-                            currentPage === page
-                              ? 'bg-indigo-600 text-white shadow-sm'
-                              : 'bg-white text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      )
-                    })}
- 
-                    <button
-                      type="button"
-                      onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages}
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-                    >
-                      Siguiente
-                    </button>
-                  </div>
+        ) : (
+          <div className="space-y-3">
+            {mensajes.map((mensaje) => (
+              <div
+                key={mensaje.id}
+                className="bg-white rounded-xl shadow-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-800 text-sm truncate">
+                    {mensaje.title}
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1 truncate">
+                    {mensaje.body}
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleEdit(mensaje)}
+                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(mensaje.id)}
+                    className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Eliminar
+                  </button>
                 </div>
               </div>
-            )}
+            ))}
           </div>
-        </div>
+        )}
       </main>
     </div>
-  )
+  );
 }
- 
-export default Mensajes
+
+export default Mensajes;
